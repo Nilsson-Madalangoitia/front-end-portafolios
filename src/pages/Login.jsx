@@ -7,6 +7,11 @@ function Login() {
   const [mensaje, setMensaje] = useState("");
   const navigate = useNavigate();
 
+  const usuarios = [
+    { correo: "admin@email.com", contraseña: "123456", rol: "Administrador" },
+    { correo: "docente1@email.com", contraseña: "1234", rol: "Docente" },
+  ];
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -15,12 +20,13 @@ function Login() {
     e.preventDefault();
 
     if (!form.correo || !form.password) {
-      setMensaje("Todos los campos son obligatorios.");
+      setMensaje("⚠️ Todos los campos son obligatorios.");
       return;
     }
 
-    if (!form.correo.includes("@")) {
-      setMensaje("Correo inválido.");
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/;
+    if (!emailRegex.test(form.correo)) {
+      setMensaje("⚠️ Correo electrónico inválido.");
       return;
     }
 
@@ -28,18 +34,28 @@ function Login() {
     setLoading(true);
 
     setTimeout(() => {
-      if (form.correo === "admin@email.com" && form.password === "123456") {
-        setMensaje("✅ ¡Inicio de sesión exitoso!");
+      const usuario = usuarios.find(
+        (u) => u.correo === form.correo && u.contraseña === form.password
+      );
+
+      if (usuario) {
+        localStorage.setItem("correo", usuario.correo);
+        localStorage.setItem("rol", usuario.rol);
+        setMensaje(`✅ ¡Bienvenido ${usuario.rol}!`);
 
         setTimeout(() => {
-          navigate("/");
+          if (usuario.rol === "Administrador") {
+            navigate("/admin");
+          } else {
+            navigate("/");
+          }
         }, 1500);
       } else {
         setMensaje("❌ Correo o contraseña incorrectos.");
       }
 
       setLoading(false);
-    }, 2000);
+    }, 1200);
   };
 
   return (
@@ -55,7 +71,7 @@ function Login() {
               name="correo"
               value={form.correo}
               onChange={handleChange}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="correo@email.com"
             />
           </div>
@@ -67,7 +83,7 @@ function Login() {
               name="password"
               value={form.password}
               onChange={handleChange}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="••••••••"
             />
           </div>
@@ -83,15 +99,20 @@ function Login() {
           </button>
         </form>
 
+        {/* ✅ Mensaje de éxito o error */}
         {mensaje && (
-          <p className={`text-sm text-center ${mensaje.includes("✅") ? "text-green-600" : "text-red-600"}`}>
+          <p
+            className={`text-sm text-center mt-2 ${
+              mensaje.includes("✅")
+                ? "text-green-600"
+                : mensaje.includes("❌") || mensaje.includes("⚠️")
+                ? "text-red-600"
+                : "text-gray-600"
+            }`}
+          >
             {mensaje}
           </p>
         )}
-
-        <p className="text-sm text-center text-gray-600">
-          ¿No tienes cuenta? <a href="/register" className="text-blue-600 hover:underline">Regístrate</a>
-        </p>
       </div>
     </div>
   );
