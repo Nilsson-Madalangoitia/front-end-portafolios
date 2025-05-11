@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ConfirmModal from "../components/ConfirmModal";
 
 function PortfolioList() {
-  const [portfolios, setPortfolios] = useState([
-    { id: 1, nombre: "PRACTICAS PRE-PROFESIONALES", year: "2024-II" },
-    { id: 2, nombre: "TESIS 2", year: "2025-I" },
-  ]);
+  const navigate = useNavigate();
+  const rol = localStorage.getItem("rol");
+  const token = localStorage.getItem("token");
+
+  const [portfolios, setPortfolios] = useState([]);
   const [newPortfolioName, setNewPortfolioName] = useState("");
   const [newYear, setNewYear] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -15,48 +16,130 @@ function PortfolioList() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
 
-  const navigate = useNavigate();
+  const fetchPortfolios = async () => {
+    try {
+      const res = await fetch("https://bkportafolio.fly.dev/api/portafolio", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-  const handleAddPortfolio = () => {
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Error ${res.status}: ${err}`);
+      }
+
+      const data = await res.json();
+      console.log("📁 Portafolios obtenidos:", data.data);
+      setPortfolios(data.data);
+    } catch (err) {
+      console.error("❌ Error al obtener portafolios:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchPortfolios();
+  }, []);
+
+  const handleAddPortfolio = async () => {
     if (!newPortfolioName.trim() || !newYear.trim()) {
-      alert("Por favor ingresa un nombre y año para el portafolio.");
+      alert("⚠️ Por favor ingresa un nombre y año para el portafolio.");
       return;
     }
-    const newPortfolio = {
-      id: Date.now(),
-      nombre: newPortfolioName,
-      year: newYear,
-    };
-    setPortfolios([...portfolios, newPortfolio]);
-    setNewPortfolioName("");
-    setNewYear("");
+
+    console.log("🟢 Creando portafolio:", { nombre: newPortfolioName, periodo: newYear });
+
+    try {
+      const res = await fetch("https://bkportafolio.fly.dev/api/portafolio", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nombre: newPortfolioName,
+          periodo: newYear,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Error ${res.status}: ${err}`);
+      }
+
+      const data = await res.json();
+      setPortfolios((prev) => [...prev, data]);
+      setNewPortfolioName("");
+      setNewYear("");
+    } catch (err) {
+      console.error("❌ Error al crear portafolio:", err);
+    }
   };
 
-  const handleEditPortfolio = (id) => {
-    const updated = portfolios.map((p) =>
-      p.id === id ? { ...p, nombre: editingName } : p
-    );
-    setPortfolios(updated);
-    setEditingId(null);
+  const handleEditPortfolio = async (id) => {
+    console.log("✏️ Editando portafolio:", id, "Nuevo nombre:", editingName);
+    try {
+      const res = await fetch(`https://bkportafolio.fly.dev/api/portafolio/${id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nombre: editingName }),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Error ${res.status}: ${err}`);
+      }
+
+      setPortfolios((prev) =>
+        prev.map((p) => (p._id === id ? { ...p, nombre: editingName } : p))
+      );
+      setEditingId(null);
+    } catch (err) {
+      console.error("❌ Error al editar portafolio:", err);
+    }
   };
 
-  const handleDeletePortfolio = () => {
-    const updated = portfolios.filter((p) => p.id !== deleteId);
-    setPortfolios(updated);
-    setDeleteId(null);
-    setShowConfirm(false);
+  const handleDeletePortfolio = async () => {
+    console.log("🗑️ Eliminando portafolio:", deleteId);
+    try {
+      const res = await fetch(`https://bkportafolio.fly.dev/api/portafolio/${deleteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Error ${res.status}: ${err}`);
+      }
+
+      setPortfolios((prev) => prev.filter((p) => p._id !== deleteId));
+      setDeleteId(null);
+      setShowConfirm(false);
+    } catch (err) {
+      console.error("❌ Error al eliminar portafolio:", err);
+    }
   };
 
   const filteredPortfolios = filterYear
-    ? portfolios.filter((p) => p.year === filterYear)
+    ? portfolios.filter((p) => p.periodo === filterYear)
     : portfolios;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-6 relative">
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
+        {rol === "ADMINISTRADOR" && (
+          <button
+            onClick={() => navigate("/admin")}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
+          >
+            ⬅ Panel Admin
+          </button>
+        )}
+      </div>
+
       <div className="max-w-5xl mx-auto bg-white shadow-lg rounded-xl p-6 space-y-8">
-        
-        {/* ✅ Aviso si es administrador */}
-        {localStorage.getItem("rol") === "Administrador" && (
+        {rol === "ADMINISTRADOR" && (
           <div className="max-w-xl mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-4">
             Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
           </div>
@@ -64,7 +147,7 @@ function PortfolioList() {
 
         <h1 className="text-3xl font-bold text-gray-800 text-center">Mis Portafolios</h1>
 
-        {/* Formulario para nuevo portafolio */}
+        {/* Crear nuevo portafolio */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold text-gray-700">Agregar nuevo portafolio</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
@@ -91,17 +174,17 @@ function PortfolioList() {
           </div>
         </div>
 
-        {/* Lista de portafolios existentes */}
+        {/* Lista de portafolios */}
         {filteredPortfolios.length === 0 ? (
           <p className="text-center text-gray-500 mt-6">Aún no tienes portafolios creados.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             {filteredPortfolios.map((portfolio) => (
               <div
-                key={portfolio.id}
+                key={portfolio._id}
                 className="flex flex-col justify-between border p-4 rounded-xl bg-gray-100 hover:bg-gray-200 transition cursor-pointer"
               >
-                {editingId === portfolio.id ? (
+                {editingId === portfolio._id ? (
                   <>
                     <input
                       type="text"
@@ -111,7 +194,7 @@ function PortfolioList() {
                     />
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleEditPortfolio(portfolio.id)}
+                        onClick={() => handleEditPortfolio(portfolio._id)}
                         className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                       >
                         Guardar
@@ -127,16 +210,16 @@ function PortfolioList() {
                 ) : (
                   <>
                     <div
-                      onClick={() => navigate(`/portfolio/${portfolio.id}`)}
+                      onClick={() => navigate(`/portfolio/${portfolio._id}`)}
                       className="text-lg font-semibold text-gray-700 mb-1 truncate"
                     >
                       {portfolio.nombre}
                     </div>
-                    <div className="text-sm text-gray-500 mb-4">{portfolio.year}</div>
+                    <div className="text-sm text-gray-500 mb-4">{portfolio.periodo}</div>
                     <div className="flex gap-3">
                       <button
                         onClick={() => {
-                          setEditingId(portfolio.id);
+                          setEditingId(portfolio._id);
                           setEditingName(portfolio.nombre);
                         }}
                         className="text-orange-600 hover:underline text-sm"
@@ -145,7 +228,7 @@ function PortfolioList() {
                       </button>
                       <button
                         onClick={() => {
-                          setDeleteId(portfolio.id);
+                          setDeleteId(portfolio._id);
                           setShowConfirm(true);
                         }}
                         className="text-red-600 hover:underline text-sm"

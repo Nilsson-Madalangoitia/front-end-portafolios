@@ -1,24 +1,51 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 function Profile() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const rol = localStorage.getItem("rol");
+  const correo = localStorage.getItem("correo");
+  const token = localStorage.getItem("token");
 
   const [form, setForm] = useState({
-    nombre: "Juan",
-    apellido: "Pérez",
+    nombre: "",
+    apellido: "",
     imagen: null,
     password: "",
     newPassword: "",
     confirmNewPassword: "",
   });
 
+  const [previewImage, setPreviewImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
-  const [passwordChanged, setPasswordChanged] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
+
+  useEffect(() => {
+    fetch(`https://bkportafolio.fly.dev/api/user/${correo}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(`Error ${res.status}: ${err}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setForm((prev) => ({
+          ...prev,
+          nombre: data.nombre || "",
+          apellido: data.apellido || "",
+        }));
+        if (data.imagen) setPreviewImage(data.imagen);
+      })
+      .catch((err) => {
+        console.error("❌ Error al obtener perfil:", err);
+        setMensaje("❌ No se pudo cargar tu perfil.");
+      });
+  }, [correo, token]);
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
@@ -27,9 +54,7 @@ function Profile() {
       setForm({ ...form, imagen: file });
       if (file) {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviewImage(reader.result);
-        };
+        reader.onloadend = () => setPreviewImage(reader.result);
         reader.readAsDataURL(file);
       }
     } else {
@@ -37,16 +62,44 @@ function Profile() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!form.nombre || !form.apellido) {
       setMensaje("⚠️ Nombre y apellido son obligatorios.");
       return;
     }
 
-    if (form.newPassword && form.newPassword.length < 6) {
-      setMensaje("⚠️ La nueva contraseña debe tener al menos 6 caracteres.");
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("nombre", form.nombre);
+    formData.append("apellido", form.apellido);
+    if (form.imagen) formData.append("archivo", form.imagen);
+
+    try {
+      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${correo}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
+
+      setMensaje("✅ Cambios guardados correctamente.");
+    } catch (err) {
+      console.error("❌ Error al guardar perfil:", err);
+      setMensaje("❌ Error al guardar cambios.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (!form.password || !form.newPassword || !form.confirmNewPassword) {
+      setMensaje("⚠️ Todos los campos son obligatorios.");
       return;
     }
 
@@ -55,30 +108,30 @@ function Profile() {
       return;
     }
 
-    setMensaje("");
-    setLoading(true);
+    try {
+      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${correo}/password`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          oldPassword: form.password,
+          newPassword: form.newPassword,
+        }),
+      });
 
-    setTimeout(() => {
-      setLoading(false);
-      setMensaje("✅ Cambios guardados correctamente.");
-    }, 2000);
-  };
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
 
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-
-    if (form.password !== "123456") {
-      setMensaje("⚠️ La contraseña actual es incorrecta.");
-      return;
-    }
-
-    if (form.newPassword && form.newPassword.length >= 6) {
-      setPasswordChanged(true);
-      setMensaje("✅ Contraseña cambiada correctamente.");
-      setForm({ ...form, password: "", newPassword: "", confirmNewPassword: "" });
+      setMensaje("✅ Contraseña actualizada.");
       setShowPasswordModal(false);
-    } else {
-      setMensaje("⚠️ La nueva contraseña debe tener al menos 6 caracteres.");
+      setForm({ ...form, password: "", newPassword: "", confirmNewPassword: "" });
+    } catch (err) {
+      console.error("❌ Error al cambiar contraseña:", err);
+      setMensaje("❌ Error al cambiar contraseña.");
     }
   };
 
@@ -87,11 +140,21 @@ function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 space-y-6">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center px-4 relative">
+      {/* Botón fijo Panel Admin */}
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
+        {rol === "ADMINISTRADOR" && (
+          <button
+            onClick={() => navigate("/admin")}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
+          >
+            ⬅ Panel Admin
+          </button>
+        )}
+      </div>
 
-        {/* ✅ Aviso para administrador */}
-        {localStorage.getItem("rol") === "Administrador" && (
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 space-y-6">
+        {rol === "ADMINISTRADOR" && (
           <div className="max-w-sm mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center">
             Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
           </div>
@@ -100,8 +163,6 @@ function Profile() {
         <h2 className="text-3xl font-bold text-center text-blue-700">Editar Perfil</h2>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-
-          {/* Imagen de perfil */}
           <div className="flex flex-col items-center space-y-3">
             {previewImage ? (
               <img
@@ -131,7 +192,6 @@ function Profile() {
             />
           </div>
 
-          {/* Nombre */}
           <div>
             <label className="block text-gray-700 mb-1">Nombres</label>
             <input
@@ -144,7 +204,6 @@ function Profile() {
             />
           </div>
 
-          {/* Apellido */}
           <div>
             <label className="block text-gray-700 mb-1">Apellidos</label>
             <input
@@ -168,18 +227,10 @@ function Profile() {
           </button>
         </form>
 
-        {/* Mensaje de estado */}
         {mensaje && (
-          <p
-            className={`text-center text-sm font-medium ${
-              mensaje.includes("✅") ? "text-green-600" : "text-red-500"
-            }`}
-          >
-            {mensaje}
-          </p>
+          <p className="text-center text-sm font-medium text-red-500">{mensaje}</p>
         )}
 
-        {/* Botón cambiar contraseña */}
         <div className="text-center mt-4">
           <button
             onClick={() => setShowPasswordModal(true)}
@@ -189,7 +240,6 @@ function Profile() {
           </button>
         </div>
 
-        {/* Botón volver */}
         <button
           onClick={() => navigate("/")}
           className="block mx-auto mt-6 text-blue-600 hover:underline text-sm"
@@ -197,45 +247,35 @@ function Profile() {
           ⬅ Volver al inicio
         </button>
 
-        {/* Modal de cambiar contraseña */}
         {showPasswordModal && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-xl w-80 space-y-4 shadow-lg">
               <h3 className="text-lg font-bold text-center text-blue-700">Cambiar contraseña</h3>
               <form onSubmit={handlePasswordChange} className="space-y-3">
-                <div>
-                  <label className="block text-gray-700 mb-1">Contraseña actual</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    placeholder="••••••••"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-1">Nueva contraseña</label>
-                  <input
-                    type="password"
-                    name="newPassword"
-                    value={form.newPassword}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    placeholder="••••••••"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-1">Confirmar nueva contraseña</label>
-                  <input
-                    type="password"
-                    name="confirmNewPassword"
-                    value={form.confirmNewPassword}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    placeholder="••••••••"
-                  />
-                </div>
+                <input
+                  type="password"
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="Contraseña actual"
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={form.newPassword}
+                  onChange={handleChange}
+                  placeholder="Nueva contraseña"
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+                <input
+                  type="password"
+                  name="confirmNewPassword"
+                  value={form.confirmNewPassword}
+                  onChange={handleChange}
+                  placeholder="Confirmar nueva contraseña"
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
                 <div className="flex justify-between items-center pt-2">
                   <button
                     type="button"

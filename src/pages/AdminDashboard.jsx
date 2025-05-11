@@ -1,100 +1,176 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import AccountMenu from "../components/AccountMenu";
 
 function AdminDashboard() {
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
+  const rol = localStorage.getItem("rol");
 
-  const [usuarios, setUsuarios] = useState([
-    { id: 1, nombre: "Nilsson", apellido: "Madalangoitia", correo: "admin@email.com", contraseña: "123456", rol: "Administrador" },
-    { id: 2, nombre: "Diego", apellido: "Ugaz", correo: "docente1@email.com", contraseña: "1234", rol: "Docente" },
-  ]);
-
+  const [usuarios, setUsuarios] = useState([]);
   const [nuevoUsuario, setNuevoUsuario] = useState({
     nombre: "",
     apellido: "",
-    correo: "",
-    contraseña: "",
-    rol: "Docente",
+    email: "",
+    password: "",
+    rol: "680ec523f6bc85c713d73d5c",
   });
-
   const [editandoId, setEditandoId] = useState(null);
 
-  const handleSalir = () => {
-    localStorage.removeItem("correo");
-    localStorage.removeItem("rol");
-    navigate("/login");
+  const fetchUsuarios = async () => {
+    try {
+      const res = await fetch("https://bkportafolio.fly.dev/api/user", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText}`);
+      }
+      const data = await res.json();
+      setUsuarios(data.data);
+    } catch (err) {
+      console.error("❌ Error al obtener usuarios:", err);
+    }
   };
 
-  const handleIrAlHome = () => {
-    navigate("/");
-  };
+  useEffect(() => {
+    fetchUsuarios();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setNuevoUsuario((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleRegistrar = (e) => {
+  const handleRegistrar = async (e) => {
     e.preventDefault();
-    if (!nuevoUsuario.nombre || !nuevoUsuario.apellido || !nuevoUsuario.correo || !nuevoUsuario.contraseña) {
-      alert("Por favor, llena todos los campos.");
-      return;
+    try {
+      const res = await fetch("https://bkportafolio.fly.dev/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(nuevoUsuario),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText}`);
+      }
+
+      setNuevoUsuario({
+        nombre: "",
+        apellido: "",
+        email: "",
+        password: "",
+        rol: "680ec523f6bc85c713d73d5c",
+      });
+      fetchUsuarios();
+    } catch (err) {
+      console.error("❌ Error al registrar:", err);
     }
-    const nuevoId = usuarios.length > 0 ? Math.max(...usuarios.map(u => u.id)) + 1 : 1;
-    const nuevo = { ...nuevoUsuario, id: nuevoId };
-    setUsuarios([...usuarios, nuevo]);
-    setNuevoUsuario({ nombre: "", apellido: "", correo: "", contraseña: "", rol: "Docente" });
   };
 
-  const handleEditar = (id) => {
-    const usuario = usuarios.find((u) => u.id === id);
-    setNuevoUsuario(usuario);
-    setEditandoId(id);
+  const handleEditar = (usuario) => {
+    console.log(usuario)
+    setEditandoId(usuario.id);
+    setNuevoUsuario({
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      email: usuario.email,
+      password: "sistemas",
+      rol: usuario.rol.id,
+    });
   };
 
-  const handleActualizar = (e) => {
+  const handleActualizar = async (e) => {
     e.preventDefault();
-    setUsuarios(usuarios.map((u) => (u.id === editandoId ? { ...nuevoUsuario, id: editandoId } : u)));
-    setNuevoUsuario({ nombre: "", apellido: "", correo: "", contraseña: "", rol: "Docente" });
-    setEditandoId(null);
+    try {
+      console.log(editandoId)
+      console.log(nuevoUsuario)
+      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${editandoId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(nuevoUsuario),
+        
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText}`);
+      }
+
+      setEditandoId(null);
+      setNuevoUsuario({
+        nombre: "",
+        apellido: "",
+        email: "",
+        password: "",
+        rol: "",
+      });
+      fetchUsuarios();
+    } catch (err) {
+      console.error("❌ Error al actualizar:", err);
+    }
   };
 
-  const handleEliminar = (id) => {
-    if (confirm("¿Estás seguro que deseas eliminar este usuario?")) {
-      setUsuarios(usuarios.filter((u) => u.id !== id));
+  const handleEliminar = async (id) => {
+    if (!confirm("¿Seguro que deseas eliminar este usuario?")) return;
+    try {
+      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText}`);
+      }
+
+      fetchUsuarios();
+    } catch (err) {
+      console.error("❌ Error al eliminar:", err);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Título */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">Panel de Administración</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={handleIrAlHome}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              Ir al Home
-            </button>
-            <button
-              onClick={handleSalir}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-            >
-              Cerrar sesión
-            </button>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gray-100 p-6 relative">
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
+        <button
+          onClick={() => navigate("/")}
+          className="bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
+        >
+          ⬅ Volver al inicio
+        </button>
+        <AccountMenu
+          onManage={() => navigate("/profile")}
+          onLogout={() => {
+            localStorage.clear();
+            navigate("/login");
+          }}
+        />
+      </div>
 
-        {/* Formulario Registro / Edición */}
-        <div className="bg-white shadow rounded-lg p-6 mb-10">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">
+      {rol === "ADMINISTRADOR" && (
+        <div className="max-w-xl mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-6">
+          Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
+        </div>
+      )}
+
+      <div className="max-w-5xl mx-auto space-y-10">
+        {/* Formulario */}
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
             {editandoId ? "Editar Docente" : "Registrar Docente"}
           </h2>
           <form
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
             onSubmit={editandoId ? handleActualizar : handleRegistrar}
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             <input
               type="text"
@@ -103,6 +179,7 @@ function AdminDashboard() {
               value={nuevoUsuario.nombre}
               onChange={handleChange}
               className="border p-2 rounded"
+              required
             />
             <input
               type="text"
@@ -111,87 +188,74 @@ function AdminDashboard() {
               value={nuevoUsuario.apellido}
               onChange={handleChange}
               className="border p-2 rounded"
+              required
             />
             <input
               type="email"
-              name="correo"
+              name="email"
               placeholder="Correo"
-              value={nuevoUsuario.correo}
+              value={nuevoUsuario.email}
               onChange={handleChange}
               className="border p-2 rounded"
+              required
+              disabled={!!editandoId}
             />
             <input
               type="password"
-              name="contraseña"
-              placeholder="Contraseña"
-              value={nuevoUsuario.contraseña}
+              name="password"
+              placeholder={editandoId ? "Nueva contraseña (opcional)" : "Contraseña"}
+              value={nuevoUsuario.password}
               onChange={handleChange}
               className="border p-2 rounded"
             />
-            <select
-              name="rol"
-              value={nuevoUsuario.rol}
-              onChange={handleChange}
-              className="border p-2 rounded"
-              disabled
-            >
-              <option value="Docente">Docente</option>
-              <option value="Administrador">Administrador</option>
-            </select>
             <button
               type="submit"
-              className="bg-blue-600 text-white rounded p-2 hover:bg-blue-700 transition"
+              className="bg-blue-600 text-white rounded p-2 hover:bg-blue-700 transition col-span-1 md:col-span-2"
             >
               {editandoId ? "Actualizar Docente" : "Registrar Docente"}
             </button>
           </form>
         </div>
 
-        {/* Lista de Usuarios */}
-        <div className="bg-white shadow rounded-lg p-6 mb-10">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Docentes Registrados</h2>
+        {/* Lista */}
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Docentes Registrados</h2>
           <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
-              <thead>
-                <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                  <th className="py-3 px-6 text-left">ID</th>
-                  <th className="py-3 px-6 text-left">Nombre</th>
-                  <th className="py-3 px-6 text-left">Apellido</th>
-                  <th className="py-3 px-6 text-left">Correo</th>
-                  <th className="py-3 px-6 text-center">Rol</th>
-                  <th className="py-3 px-6 text-center">Acciones</th>
+            <table className="min-w-full text-sm border">
+              <thead className="bg-gray-100 text-gray-700">
+                <tr>
+                  <th className="p-3 text-left">Nombre</th>
+                  <th className="p-3 text-left">Apellido</th>
+                  <th className="p-3 text-left">Correo</th>
+                  <th className="p-3 text-center">Rol</th>
+                  <th className="p-3 text-center">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="text-gray-700 text-sm font-light">
-                {usuarios
-                  .sort((a, b) =>
-                    a.rol === "Administrador" ? -1 : b.rol === "Administrador" ? 1 : 0
-                  )
-                  .map((usuario) => (
-                    <tr key={usuario.id} className="border-b border-gray-200 hover:bg-gray-100">
-                      <td className="py-3 px-6 text-left">{usuario.id}</td>
-                      <td className="py-3 px-6 text-left">{usuario.nombre}</td>
-                      <td className="py-3 px-6 text-left">{usuario.apellido}</td>
-                      <td className="py-3 px-6 text-left">{usuario.correo}</td>
-                      <td className="py-3 px-6 text-center">{usuario.rol}</td>
-                      <td className="py-3 px-6 text-center space-x-2">
+              <tbody>
+                {usuarios.map((u) => (
+                  <tr key={u.id} className="border-t">
+                    <td className="p-3">{u.nombre}</td>
+                    <td className="p-3">{u.apellido}</td>
+                    <td className="p-3">{u.email}</td>
+                    <td className="p-3 text-center">{u.rol?.nombre}</td>
+                    <td className="p-3 text-center space-x-2">
+                      <button
+                        onClick={() => handleEditar(u)}
+                        className="px-3 py-1 bg-yellow-400 text-white rounded hover:bg-yellow-500"
+                      >
+                        Editar
+                      </button>
+                      {u.rol?.nombre !== "ADMINISTRADOR" && (
                         <button
-                          onClick={() => handleEditar(usuario.id)}
-                          className="px-3 py-1 bg-yellow-400 text-white rounded hover:bg-yellow-500"
+                          onClick={() => handleEliminar(u.id)}
+                          className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
                         >
-                          Editar
+                          Eliminar
                         </button>
-                        {usuario.rol !== "Administrador" && (
-                          <button
-                            onClick={() => handleEliminar(usuario.id)}
-                            className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                          >
-                            Eliminar
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

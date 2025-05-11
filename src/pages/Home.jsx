@@ -13,42 +13,69 @@ function Home() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rol, setRol] = useState(null);
-  const navigate = useNavigate();
   const chatContainerRef = useRef(null);
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     const correo = localStorage.getItem("correo");
     const rolGuardado = localStorage.getItem("rol");
 
-    if (!correo || !rolGuardado) {
+    if (!correo || !rolGuardado || !token) {
       navigate("/login");
     } else {
       setRol(rolGuardado);
     }
+
+    fetch("https://bkportafolio.fly.dev/api/precision", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Error al obtener precisión");
+        return res.json();
+      })
+      .then((data) => {
+        if (data?.precision) {
+          setPrecision(data.precision);
+        }
+      })
+      .catch((err) => console.error("❌ Error precisión:", err));
   }, []);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
     setLoading(true);
 
-    const nuevaPregunta = {
-      pregunta: input,
-      respuesta: "Respuesta simulada...",
-    };
+    try {
+      const res = await fetch("https://bkportafolio.fly.dev/api/consultar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ pregunta: input }),
+      });
 
-    setTimeout(() => {
-      setResponses((prev) => [...prev, nuevaPregunta]);
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText}`);
+      }
+
+      const data = await res.json();
+      setResponses((prev) => [...prev, { pregunta: input, respuesta: data.respuesta }]);
       setInput("");
+    } catch (err) {
+      console.error("❌ Error en consulta:", err);
+    } finally {
       setLoading(false);
-      setPrecision(Math.floor(Math.random() * 11) + 90);
-    }, 800);
+    }
   };
 
-  const handleSelect = (item) => {
-    setSelected(item);
-  };
+  const handleSelect = (item) => setSelected(item);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -58,8 +85,16 @@ function Home() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Menú de cuenta */}
-      <div className="absolute top-4 right-4 z-50">
+      {/* Botón Panel Admin + Menú de cuenta */}
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
+        {rol === "ADMINISTRADOR" && (
+          <button
+            onClick={() => navigate("/admin")}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
+          >
+            ⬅ Panel Admin
+          </button>
+        )}
         <AccountMenu
           onManage={() => navigate("/profile")}
           onLogout={() => {
@@ -83,22 +118,18 @@ function Home() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        {/* ✅ Alerta para Administrador (dentro del layout, no fixed) */}
-        {rol === "Administrador" && (
-        <div className="max-w-xl mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-4">
-        Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
-       </div>
-      )}
+        {rol === "ADMINISTRADOR" && (
+          <div className="max-w-xl mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-4">
+            Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
+          </div>
+        )}
 
-
-        {/* Header */}
         <div className="text-center mb-2">
           <h1 className="text-4xl font-extrabold text-blue-700 tracking-wide">
             Sistema de Portafolios Académicos
           </h1>
         </div>
 
-        {/* Sección de precisión */}
         {precision !== null && (
           <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl shadow text-center">
             <p className="text-xl font-bold text-orange-600">
@@ -108,7 +139,6 @@ function Home() {
           </div>
         )}
 
-        {/* Formulario */}
         <form onSubmit={handleSubmit} className="w-full max-w-2xl flex space-x-2 mb-8">
           <input
             type="text"
@@ -117,7 +147,6 @@ function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-
           <button
             type="submit"
             disabled={loading}
@@ -129,7 +158,6 @@ function Home() {
           </button>
         </form>
 
-        {/* Chat */}
         <div
           ref={chatContainerRef}
           className="flex-1 space-y-4 overflow-y-auto bg-gray-100 rounded-lg shadow-inner p-6 border"
@@ -162,7 +190,6 @@ function Home() {
           )}
         </div>
 
-        {/* Consulta seleccionada */}
         {selected && (
           <motion.div
             key={selected.pregunta}
@@ -180,7 +207,6 @@ function Home() {
           </motion.div>
         )}
 
-        {/* Modal Confirmación */}
         <ConfirmModal
           isOpen={showConfirm}
           title="¿Eliminar historial?"

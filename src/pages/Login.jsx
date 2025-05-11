@@ -7,16 +7,11 @@ function Login() {
   const [mensaje, setMensaje] = useState("");
   const navigate = useNavigate();
 
-  const usuarios = [
-    { correo: "admin@email.com", contraseña: "123456", rol: "Administrador" },
-    { correo: "docente1@email.com", contraseña: "1234", rol: "Docente" },
-  ];
-
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!form.correo || !form.password) {
@@ -33,29 +28,51 @@ function Login() {
     setMensaje("");
     setLoading(true);
 
-    setTimeout(() => {
-      const usuario = usuarios.find(
-        (u) => u.correo === form.correo && u.contraseña === form.password
-      );
+    try {
+      const res = await fetch("https://bkportafolio.fly.dev/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.correo,
+          password: form.password,
+        }),
+      });
 
-      if (usuario) {
-        localStorage.setItem("correo", usuario.correo);
-        localStorage.setItem("rol", usuario.rol);
-        setMensaje(`✅ ¡Bienvenido ${usuario.rol}!`);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ Error al iniciar sesión:", errorText);
+        setMensaje("❌ Correo o contraseña incorrectos.");
+        setLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.token && data.user) {
+        localStorage.setItem("correo", data.user.email);
+        localStorage.setItem("rol", data.user.rol.nombre);
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("nombre", data.user.nombre);
+        localStorage.setItem("apellido", data.user.apellido);
+
+        setMensaje(`✅ ¡Bienvenido ${data.user.rol.nombre}!`);
 
         setTimeout(() => {
-          if (usuario.rol === "Administrador") {
+          if (data.user.rol.nombre === "ADMINISTRADOR") {
             navigate("/admin");
           } else {
             navigate("/");
           }
         }, 1500);
       } else {
-        setMensaje("❌ Correo o contraseña incorrectos.");
+        setMensaje("❌ Datos inválidos en la respuesta del servidor.");
       }
+    } catch (error) {
+      console.error("❌ Error en el login:", error);
+      setMensaje("❌ Error de conexión al servidor.");
+    }
 
-      setLoading(false);
-    }, 1200);
+    setLoading(false);
   };
 
   return (
@@ -99,10 +116,9 @@ function Login() {
           </button>
         </form>
 
-        {/* ✅ Mensaje de éxito o error */}
         {mensaje && (
           <p
-            className={`text-sm text-center mt-2 ${
+            className={`text-sm text-center mt-2 font-medium ${
               mensaje.includes("✅")
                 ? "text-green-600"
                 : mensaje.includes("❌") || mensaje.includes("⚠️")

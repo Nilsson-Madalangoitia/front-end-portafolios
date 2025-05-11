@@ -1,6 +1,15 @@
 import { motion } from "framer-motion";
+import { useEffect } from "react";
 
-function ConfirmModal({ isOpen, title, message, onCancel, onConfirm }) {
+function ConfirmModal({ isOpen, title, message, onCancel, onConfirm, dangerLabel = "Eliminar" }) {
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === "Escape") onCancel();
+    };
+    if (isOpen) document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [isOpen, onCancel]);
+
   if (!isOpen) return null;
 
   return (
@@ -10,6 +19,10 @@ function ConfirmModal({ isOpen, title, message, onCancel, onConfirm }) {
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.3 }}
         className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full space-y-6 border-t-4 border-orange-400 text-center"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        aria-describedby="modal-description"
       >
         <div className="flex justify-center">
           <div className="bg-orange-100 p-4 rounded-full">
@@ -18,6 +31,8 @@ function ConfirmModal({ isOpen, title, message, onCancel, onConfirm }) {
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
+              role="img"
             >
               <path
                 strokeLinecap="round"
@@ -29,8 +44,8 @@ function ConfirmModal({ isOpen, title, message, onCancel, onConfirm }) {
           </div>
         </div>
 
-        <h2 className="text-2xl font-bold text-blue-700">{title}</h2>
-        <p className="text-gray-600">{message}</p>
+        <h2 id="modal-title" className="text-2xl font-bold text-blue-700">{title}</h2>
+        <p id="modal-description" className="text-gray-600">{message}</p>
 
         <div className="flex justify-center gap-4 mt-6">
           <button
@@ -43,7 +58,7 @@ function ConfirmModal({ isOpen, title, message, onCancel, onConfirm }) {
             onClick={onConfirm}
             className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold transition"
           >
-            Eliminar
+            {dangerLabel}
           </button>
         </div>
       </motion.div>

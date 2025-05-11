@@ -20,9 +20,12 @@ function Sidebar({ history, onSelect, onClear }) {
             >
               <button
                 onClick={() => onSelect(item)}
-                className="w-full text-left p-3 rounded-lg bg-white hover:bg-blue-100 text-blue-700 text-sm font-medium transition shadow-sm"
+                aria-label={`Consulta ${index + 1}`}
+                className="w-full text-left p-3 rounded-lg bg-white hover:bg-blue-100 text-blue-700 text-sm font-medium transition shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               >
-                {item.pregunta.length > 40 ? item.pregunta.slice(0, 40) + "..." : item.pregunta}
+                {(item.pregunta?.length || 0) > 40
+                  ? item.pregunta.slice(0, 40) + "..."
+                  : item.pregunta}
               </button>
             </motion.div>
           ))
@@ -33,7 +36,8 @@ function Sidebar({ history, onSelect, onClear }) {
         <div className="mt-6">
           <button
             onClick={onClear}
-            className="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-semibold text-sm transition shadow"
+            aria-label="Limpiar historial"
+            className="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-semibold text-sm transition shadow focus:outline-none focus:ring-2 focus:ring-red-300"
           >
             🗑️ Limpiar historial
           </button>
