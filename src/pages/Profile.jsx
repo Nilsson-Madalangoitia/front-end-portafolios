@@ -23,7 +23,7 @@ function Profile() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
-    fetch(`https://bkportafolio.fly.dev/api/user/${correo}`, {
+    fetch(`https://bkportafolio.fly.dev/api/auth/profile`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
@@ -31,15 +31,16 @@ function Profile() {
           const err = await res.text();
           throw new Error(`Error ${res.status}: ${err}`);
         }
-        return res.json();
+        return await res.json();
       })
       .then((data) => {
         setForm((prev) => ({
           ...prev,
-          nombre: data.nombre || "",
-          apellido: data.apellido || "",
+          nombre: data.user.nombre || "",
+          apellido: data.user.apellido || "",
         }));
         if (data.imagen) setPreviewImage(data.imagen);
+        console.log(data)
       })
       .catch((err) => {
         console.error("❌ Error al obtener perfil:", err);

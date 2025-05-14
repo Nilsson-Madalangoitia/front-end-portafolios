@@ -26,7 +26,8 @@ function PortfolioDetail() {
         return res.json();
       })
       .then((data) => {
-        if (data?.descripcion) setPortfolioName(data.descripcion);
+        if (data.data.descripcion) setPortfolioName(data.data.descripcion);
+        
       })
       .catch((err) => console.error("❌ Error al obtener portafolio:", err));
   }, [id, token]);
@@ -34,7 +35,7 @@ function PortfolioDetail() {
   // Obtener archivos reales desde backend
   useEffect(() => {
     if (!id) return;
-    fetch(`https://bkportafolio.fly.dev/api/archivo/portafolio/${id}`, {
+    fetch(`https://bkportafolio.fly.dev/api/archivo`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
@@ -42,9 +43,13 @@ function PortfolioDetail() {
           const err = await res.text();
           throw new Error(`Error ${res.status}: ${err}`);
         }
+        
         return res.json();
       })
-      .then((data) => setUploadedFiles(data))
+      .then((data) => {
+        console.log(data.data);
+        setUploadedFiles(data.data);
+      })
       .catch((err) => console.error("❌ Error al obtener archivos:", err));
   }, [id, token]);
 
@@ -53,18 +58,45 @@ function PortfolioDetail() {
   };
 
   const handleUpload = async (e) => {
+
     e.preventDefault();
+
     if (files.length === 0) {
       alert("⚠️ Debes seleccionar al menos un archivo.");
       return;
     }
 
-    const formData = new FormData();
-    files.forEach((file) => formData.append("archivo", file));
-    formData.append("portafolioId", id);
+     const formData = new FormData();
+
+    await Promise.all(
+      files.map((file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const buffer = event.target.result;
+            const blob = new Blob([buffer], { type: file.type });
+            const nombre = file.name.replace(/\.[^/.]+$/, "");
+
+            // ⬇ Agregar los tres valores al FormData
+            formData.append("file", blob); // el archivo
+            formData.append("nombre", nombre); // el nombre original
+            formData.append("tipo", file.name.split(".").pop()); // la extensión
+
+            resolve();
+          };
+          reader.onerror = reject;
+          reader.readAsArrayBuffer(file);
+        })
+      )
+    );
 
     try {
-      const res = await fetch("https://bkportafolio.fly.dev/api/upload", {
+      
+      for (let pair of formData.entries()) {
+        console.log(pair[0] + ':', pair[1]);
+      }
+      
+      const res = await fetch("https://bkportafolio.fly.dev/api/archivo", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -110,7 +142,7 @@ function PortfolioDetail() {
 
         <div className="flex justify-between items-center border-b pb-4">
           <h1 className="text-2xl font-bold text-gray-800">
-            Archivos del Portafolio #{id}{" "}
+            Archivos del Portafolio #{portfolioName}{""}
             {portfolioName && <span className="text-blue-600">({portfolioName})</span>}
           </h1>
           <button
@@ -173,13 +205,22 @@ function PortfolioDetail() {
           {uploadedFiles.length === 0 ? (
             <p className="text-gray-500">No hay archivos en este portafolio.</p>
           ) : (
-            <ul className="space-y-2">
-              {uploadedFiles.map((file, index) => (
-                <li key={index} className="p-2 bg-blue-100 text-blue-800 rounded shadow-sm">
-                  {file.nombreOriginal || file.originalName || file.filename || "Archivo"}
-                </li>
-              ))}
-            </ul>
+            <table className="w-full table-auto border-collapse">
+              <thead>
+                <tr className="bg-gray-200 text-gray-700 text-left">
+                  <th className="px-4 py-2">Nombre</th>
+                  <th className="px-4 py-2">Tipo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {uploadedFiles.map((file, index) => (
+                  <tr key={index} className="bg-blue-50 border-b">
+                    <td className="px-4 py-2">{file.nombre || "Archivo"}</td>
+                    <td className="px-4 py-2">{file.tipo || "?"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>

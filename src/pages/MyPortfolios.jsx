@@ -16,6 +16,7 @@ function MyPortfolios() {
   const fetchPortfolios = async () => {
     try {
       const res = await fetch("https://bkportafolio.fly.dev/api/portafolio", {
+        
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -51,6 +52,8 @@ function MyPortfolios() {
         body: JSON.stringify({
           descripcion: newPortfolio.nombre,
           anio: newPortfolio.periodo,
+          nombre: newPortfolio.nombre,
+          
         }),
       });
 
@@ -68,8 +71,8 @@ function MyPortfolios() {
   };
 
   const handleEditClick = (portfolio) => {
-    setEditingId(portfolio._id);
-    setEditingData({ nombre: portfolio.descripcion, periodo: portfolio.anio });
+    setEditingId(portfolio.id);
+    setEditingData({  nombre: portfolio.descripcion, periodo: portfolio.anio });
   };
 
   const handleSaveEdit = async (id) => {
@@ -87,6 +90,7 @@ function MyPortfolios() {
         },
         body: JSON.stringify({
           descripcion: editingData.nombre,
+          nombre: editingData.nombre,
           anio: editingData.periodo,
         }),
       });
@@ -105,6 +109,7 @@ function MyPortfolios() {
 
   const handleDelete = async () => {
     try {
+      console.log(portfolioToDelete) 
       const res = await fetch(
         `https://bkportafolio.fly.dev/api/portafolio/${portfolioToDelete}`,
         {
@@ -186,10 +191,10 @@ function MyPortfolios() {
           ) : (
             portfolios.map((p) => (
               <div
-                key={p._id}
+                key={p.id}
                 className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg bg-blue-50 hover:shadow-md transition"
               >
-                {editingId === p._id ? (
+                {editingId === p.id ? (
                   <div className="flex-1 flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
                     <input
                       type="text"
@@ -211,7 +216,7 @@ function MyPortfolios() {
                 ) : (
                   <div
                     className="flex-1 cursor-pointer"
-                    onClick={() => handleGoToPortfolio(p._id)}
+                    onClick={() => handleGoToPortfolio(p.id)}
                   >
                     <p className="font-semibold text-blue-800">{p.descripcion}</p>
                     <p className="text-sm text-gray-500">{p.anio}</p>
@@ -219,10 +224,10 @@ function MyPortfolios() {
                 )}
 
                 <div className="flex space-x-2 mt-4 md:mt-0">
-                  {editingId === p._id ? (
+                  {editingId === p.id ? (
                     <>
                       <button
-                        onClick={() => handleSaveEdit(p._id)}
+                        onClick={() => handleSaveEdit(p.id)}
                         className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
                       >
                         Guardar
@@ -244,7 +249,7 @@ function MyPortfolios() {
                       </button>
                       <button
                         onClick={() => {
-                          setPortfolioToDelete(p._id);
+                          setPortfolioToDelete(p.id);
                           setShowDeleteModal(true);
                         }}
                         className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"

@@ -17,33 +17,6 @@ function Home() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  useEffect(() => {
-    const correo = localStorage.getItem("correo");
-    const rolGuardado = localStorage.getItem("rol");
-
-    if (!correo || !rolGuardado || !token) {
-      navigate("/login");
-    } else {
-      setRol(rolGuardado);
-    }
-
-    fetch("https://bkportafolio.fly.dev/api/precision", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Error al obtener precisión");
-        return res.json();
-      })
-      .then((data) => {
-        if (data?.precision) {
-          setPrecision(data.precision);
-        }
-      })
-      .catch((err) => console.error("❌ Error precisión:", err));
-  }, []);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -51,22 +24,26 @@ function Home() {
     setLoading(true);
 
     try {
-      const res = await fetch("https://bkportafolio.fly.dev/api/consultar", {
-        method: "POST",
+
+      var query = encodeURIComponent(input);
+      var url = `https://bkportafolio.fly.dev/api/archivo/consulta?question=${query}`;
+      console.log(url)
+      var res = await fetch(url, {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ pregunta: input }),
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
+        var errorText = await res.text();
         throw new Error(`Error ${res.status}: ${errorText}`);
       }
 
-      const data = await res.json();
-      setResponses((prev) => [...prev, { pregunta: input, respuesta: data.respuesta }]);
+      var data = await res.json();
+      var respuestas = data.data.map(item => item.text).join("\n");
+      console.log(respuestas)
+      setResponses((prev) => [...prev, { pregunta: input, respuesta: respuestas }]);
       setInput("");
     } catch (err) {
       console.error("❌ Error en consulta:", err);
@@ -77,11 +54,7 @@ function Home() {
 
   const handleSelect = (item) => setSelected(item);
 
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [responses]);
+ 
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -207,17 +180,6 @@ function Home() {
           </motion.div>
         )}
 
-        <ConfirmModal
-          isOpen={showConfirm}
-          title="¿Eliminar historial?"
-          message="Esta acción eliminará todas las consultas."
-          onCancel={() => setShowConfirm(false)}
-          onConfirm={() => {
-            setResponses([]);
-            setSelected(null);
-            setShowConfirm(false);
-          }}
-        />
       </motion.div>
     </div>
   );

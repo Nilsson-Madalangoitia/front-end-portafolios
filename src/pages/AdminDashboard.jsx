@@ -20,10 +20,13 @@ function AdminDashboard() {
   const fetchUsuarios = async () => {
     try {
       const res = await fetch("https://bkportafolio.fly.dev/api/user", {
+      
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
+
       });
-      if (!res.ok) {
+    
+       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(`Error ${res.status}: ${errorText}`);
       }

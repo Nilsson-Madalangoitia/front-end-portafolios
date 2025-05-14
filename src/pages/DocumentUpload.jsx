@@ -56,7 +56,7 @@ function DocumentUpload() {
     const formData = new FormData();
     files.forEach((file) => formData.append("archivo", file));
     formData.append("portafolioId", id);
-
+// https://bkportafolio.fly.dev/api/upload
     try {
       const res = await fetch("https://bkportafolio.fly.dev/api/upload", {
         method: "POST",
