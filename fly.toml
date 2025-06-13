@@ -1,8 +1,3 @@
-# fly.toml app configuration file generated for front-portafolios on 2025-05-09T18:25:48-05:00
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
 app = 'front-portafolios'
 primary_region = 'bog'
 
@@ -20,3 +15,29 @@ primary_region = 'bog'
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
+
+# 👇 Esta sección permite servir archivos estáticos como index.html y manejar rutas SPA
+[[statics]]
+  guest_path = "/app/dist"
+  url_prefix = "/"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 80
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    grace_period = "5s"
+    interval = "15s"
+    method = "get"
+    path = "/"
+    protocol = "http"
+    timeout = "2s"

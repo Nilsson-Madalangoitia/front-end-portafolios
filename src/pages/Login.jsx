@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+const apiUrl = import.meta.env.VITE_API_URL;
 
 function Login() {
   const [form, setForm] = useState({ correo: "", password: "" });
@@ -14,13 +15,16 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.correo || !form.password) {
+    const correo = form.correo.trim().toLowerCase();
+    const password = form.password.trim();
+
+    if (!correo || !password) {
       setMensaje("⚠️ Todos los campos son obligatorios.");
       return;
     }
 
     const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/;
-    if (!emailRegex.test(form.correo)) {
+    if (!emailRegex.test(correo)) {
       setMensaje("⚠️ Correo electrónico inválido.");
       return;
     }
@@ -29,13 +33,10 @@ function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("https://bkportafolio.fly.dev/api/auth/login", {
+      const res = await fetch(`${apiUrl}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: form.correo,
-          password: form.password,
-        }),
+        body: JSON.stringify({ email: correo, password }),
       });
 
       if (!res.ok) {
@@ -49,17 +50,27 @@ function Login() {
       const data = await res.json();
 
       if (data.token && data.user) {
-        localStorage.setItem("correo", data.user.email);
-        localStorage.setItem("rol", data.user.rol.nombre);
+        // 🔄 Limpiar y guardar datos nuevos
+        localStorage.clear();
         localStorage.setItem("token", data.token);
+        localStorage.setItem("rol", data.user.rol.nombre);
+        localStorage.setItem("correo", data.user.email);
         localStorage.setItem("nombre", data.user.nombre);
         localStorage.setItem("apellido", data.user.apellido);
+        localStorage.setItem("userId", data.user.id);
+
+        // ⏰ Guardamos vencimiento de token (1 hora)
+        const expiry = new Date().getTime() + 60 * 60 * 1000;
+        localStorage.setItem("tokenExpiry", expiry);
 
         setMensaje(`✅ ¡Bienvenido ${data.user.rol.nombre}!`);
 
+        // Redirigir según el rol
         setTimeout(() => {
           if (data.user.rol.nombre === "ADMINISTRADOR") {
-            navigate("/admin");
+            navigate("/admin/home");
+          } else if (data.user.rol.nombre === "DOCENTE") {
+            navigate("/docente/dashboard");
           } else {
             navigate("/");
           }

@@ -1,68 +1,83 @@
-import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import Sidebar from "../components/Sidebar";
+import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import AccountMenu from "../components/AccountMenu";
-import ConfirmModal from "../components/ConfirmModal";
+
+const apiUrl = import.meta.env.VITE_API_URL;
 
 function Home() {
   const [input, setInput] = useState("");
   const [responses, setResponses] = useState([]);
-  const [selected, setSelected] = useState(null);
   const [precision, setPrecision] = useState(null);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rol, setRol] = useState(null);
   const chatContainerRef = useRef(null);
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
+  useEffect(() => {
+    setRol(localStorage.getItem("rol"));
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
     setLoading(true);
+    console.log("[Consulta] Iniciando búsqueda...");
 
     try {
+      const query = encodeURIComponent(input);
+      const url = `${apiUrl}/archivo/consulta?question=${query}&userid=683b982f973ccc3423b5a95f`;
+      console.log("[Consulta] URL:", url);
 
-      var query = encodeURIComponent(input);
-      var url = `https://bkportafolio.fly.dev/api/archivo/consulta?question=${query}`;
-      console.log(url)
-      var res = await fetch(url, {
+      const res = await fetch(url, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
+      console.log("[Consulta] Status:", res.status);
+
       if (!res.ok) {
-        var errorText = await res.text();
+        const errorText = await res.text();
+        console.error("[Consulta] Error en respuesta:", errorText);
         throw new Error(`Error ${res.status}: ${errorText}`);
       }
 
-      var data = await res.json();
-      var respuestas = data.data.map(item => item.text).join("\n");
-      console.log(respuestas)
-      setResponses((prev) => [...prev, { pregunta: input, respuesta: respuestas }]);
+      const data = await res.json();
+      console.log("[Consulta] Data recibida:", data);
+
+      let respuestaFinal = "⚠️ No se encontró ninguna respuesta relevante.";
+      if (data.data && data.data.length > 0) {
+        respuestaFinal = data.data.map((item) => item.text).join("\n");
+      }
+
+      setResponses((prev) => [
+        ...prev,
+        { pregunta: input, respuesta: respuestaFinal },
+      ]);
+      setPrecision(data.data[0].score || 0);
       setInput("");
     } catch (err) {
       console.error("❌ Error en consulta:", err);
+      setResponses((prev) => [
+        ...prev,
+        { pregunta: input, respuesta: `❌ Error en consulta: ${err.message}` },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelect = (item) => setSelected(item);
-
- 
-
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Botón Panel Admin + Menú de cuenta */}
+      {/* Panel Admin + Menú de cuenta */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
         {rol === "ADMINISTRADOR" && (
           <button
-            onClick={() => navigate("/admin")}
+            onClick={() => navigate("/admin/home")}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
           >
             ⬅ Panel Admin
@@ -76,13 +91,24 @@ function Home() {
           }}
         />
       </div>
-
-      {/* Sidebar */}
-      <Sidebar
-        history={responses}
-        onSelect={handleSelect}
-        onClear={() => setShowConfirm(true)}
-      />
+      {/* Panel Docente + Menú de cuenta */}
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
+        {rol === "DOCENTE" && (
+          <button
+            onClick={() => navigate("/docente/dashboard")}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
+          >
+            ⬅ Inicio
+          </button>
+        )}
+        <AccountMenu
+          onManage={() => navigate("/profile")}
+          onLogout={() => {
+            localStorage.clear();
+            navigate("/login");
+          }}
+        />
+      </div>
 
       {/* Contenido principal */}
       <motion.div
@@ -139,47 +165,31 @@ function Home() {
             <p className="text-center text-gray-400">No hay consultas recientes.</p>
           ) : (
             responses.map((response, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className={`flex ${index % 2 === 0 ? "justify-start" : "justify-end"}`}
-              >
-                <div
-                  className={`px-4 py-3 rounded-xl max-w-xs shadow ${
-                    index % 2 === 0
-                      ? "bg-blue-100 text-blue-900"
-                      : "bg-orange-100 text-orange-700"
-                  }`}
+              <div key={index} className="space-y-2">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex justify-start"
                 >
-                  <p>
-                    <strong>{index % 2 === 0 ? "Consulta:" : "Respuesta:"}</strong>{" "}
-                    {index % 2 === 0 ? response.pregunta : response.respuesta}
-                  </p>
-                </div>
-              </motion.div>
+                  <div className="px-4 py-3 rounded-xl max-w-xl shadow bg-blue-100 text-blue-900">
+                    <p><strong>Consulta:</strong> {response.pregunta}</p>
+                  </div>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex justify-end"
+                >
+                  <div className="px-4 py-3 rounded-xl max-w-xl shadow bg-orange-100 text-orange-700">
+                    <p><strong>Respuesta:</strong> {response.respuesta}</p>
+                  </div>
+                </motion.div>
+              </div>
             ))
           )}
         </div>
-
-        {selected && (
-          <motion.div
-            key={selected.pregunta}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow-lg mt-8 border"
-          >
-            <p className="text-sm text-gray-500 mb-2">
-              <strong>Consulta seleccionada:</strong> {selected.pregunta}
-            </p>
-            <p className="text-gray-800">
-              <strong>Respuesta:</strong> {selected.respuesta}
-            </p>
-          </motion.div>
-        )}
-
       </motion.div>
     </div>
   );

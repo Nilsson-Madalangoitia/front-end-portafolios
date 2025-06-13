@@ -1,114 +1,86 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+
+const apiUrl = import.meta.env.VITE_API_URL;
 
 function PortfolioDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const rol = localStorage.getItem("rol");
   const token = localStorage.getItem("token");
+  const correo = localStorage.getItem("correo");
 
-  const [files, setFiles] = useState([]);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [successMessage, setSuccessMessage] = useState("");
   const [portfolioName, setPortfolioName] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [files, setFiles] = useState([]);
+  const [semana, setSemana] = useState(1);
+  const [categoria, setCategoria] = useState("Teoría");
+  const [successMessage, setSuccessMessage] = useState("");
+  const categorias = ["Teoría", "Práctica", "Laboratorio"];
+  const sectionRef = useRef(null);
 
-  // Obtener nombre real del portafolio desde backend
   useEffect(() => {
-    if (!id) return;
-    fetch(`https://bkportafolio.fly.dev/api/portafolio/${id}`, {
+    fetch(`${apiUrl}/portafolio/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(`Error ${res.status}: ${err}`);
-        }
+        if (!res.ok) throw new Error(await res.text());
         return res.json();
       })
       .then((data) => {
-        if (data.data.descripcion) setPortfolioName(data.data.descripcion);
-        
+        if (data?.data?.descripcion) setPortfolioName(data.data.descripcion);
       })
       .catch((err) => console.error("❌ Error al obtener portafolio:", err));
   }, [id, token]);
 
-  // Obtener archivos reales desde backend
   useEffect(() => {
-    if (!id) return;
-    fetch(`https://bkportafolio.fly.dev/api/archivo`, {
+    fetch(`${apiUrl}/archivo/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(`Error ${res.status}: ${err}`);
-        }
-        
+        if (!res.ok) throw new Error(await res.text());
         return res.json();
       })
       .then((data) => {
-        console.log(data.data);
-        setUploadedFiles(data.data);
+        if (rol === "DOCENTE") {
+          setUploadedFiles(data.filter((f) => f.usuario === correo));
+        } else {
+          setUploadedFiles(data);
+        }
       })
       .catch((err) => console.error("❌ Error al obtener archivos:", err));
-  }, [id, token]);
+  }, [id, token, rol, correo]);
 
   const handleFileChange = (e) => {
     setFiles(Array.from(e.target.files));
   };
 
   const handleUpload = async (e) => {
-
     e.preventDefault();
-
     if (files.length === 0) {
       alert("⚠️ Debes seleccionar al menos un archivo.");
       return;
     }
 
-     const formData = new FormData();
-
-    await Promise.all(
-      files.map((file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const buffer = event.target.result;
-            const blob = new Blob([buffer], { type: file.type });
-            const nombre = file.name.replace(/\.[^/.]+$/, "");
-
-            // ⬇ Agregar los tres valores al FormData
-            formData.append("file", blob); // el archivo
-            formData.append("nombre", nombre); // el nombre original
-            formData.append("tipo", file.name.split(".").pop()); // la extensión
-
-            resolve();
-          };
-          reader.onerror = reject;
-          reader.readAsArrayBuffer(file);
-        })
-      )
-    );
+    const formData = new FormData();
+    files.forEach((file) => formData.append("file", file));
+    formData.append("portafolio", id);
+    formData.append("semana", semana);
+    formData.append("nombre", "prueba -- 002");
+    formData.append("tipo", "pdf");
+    formData.append("categoria", categoria);
 
     try {
-      
-      for (let pair of formData.entries()) {
-        console.log(pair[0] + ':', pair[1]);
-      }
-      
-      const res = await fetch("https://bkportafolio.fly.dev/api/archivo", {
+      const res = await fetch(`${apiUrl}/archivo`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
+      if (!res.ok) throw new Error(await res.text());
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Error ${res.status}: ${err}`);
-      }
-
-      const nuevo = await res.json();
-      setUploadedFiles((prev) => [...prev, nuevo]);
+      const result = await res.json();
+      const nuevos = Array.isArray(result) ? result : [result];
+      setUploadedFiles((prev) => [...prev, ...nuevos]);
       setFiles([]);
       setSuccessMessage("✅ ¡Archivos subidos exitosamente!");
       setTimeout(() => setSuccessMessage(""), 3000);
@@ -117,111 +89,139 @@ function PortfolioDetail() {
     }
   };
 
-  const handleCancel = () => setFiles([]);
+  const handleDelete = async (fileId) => {
+    const confirm = window.confirm("¿Estás seguro de eliminar este archivo?");
+    if (!confirm) return;
+
+    try {
+      const res = await fetch(`${apiUrl}/archivo/${fileId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      setUploadedFiles((prev) => prev.filter((file) => file._id !== fileId));
+    } catch (err) {
+      console.error("❌ Error al eliminar archivo:", err);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-orange-50 flex items-center justify-center p-4 relative">
-      {/* Botón Panel Admin */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
-        {rol === "ADMINISTRADOR" && (
-          <button
-            onClick={() => navigate("/admin")}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
-          >
-            ⬅ Panel Admin
-          </button>
-        )}
-      </div>
-
-      <div className="w-full max-w-3xl bg-white rounded-xl shadow-lg p-8 space-y-6">
-        {rol === "ADMINISTRADOR" && (
-          <div className="max-w-xl mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-4">
-            Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
-          </div>
-        )}
-
-        <div className="flex justify-between items-center border-b pb-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-orange-50 p-6 pb-36">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800">
-            Archivos del Portafolio #{portfolioName}{""}
-            {portfolioName && <span className="text-blue-600">({portfolioName})</span>}
+            Archivos del Portafolio <span className="text-blue-600">({portfolioName})</span>
           </h1>
           <button
-            onClick={() => navigate("/my-portfolios")}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
+            onClick={() => navigate("/portafolios")}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
             ⬅ Volver
           </button>
         </div>
 
         {successMessage && (
-          <div className="bg-green-100 text-green-700 text-center py-3 rounded-lg font-semibold shadow-md">
+          <div className="bg-green-100 text-green-700 p-3 rounded shadow">
             {successMessage}
           </div>
         )}
 
-        <form onSubmit={handleUpload} className="space-y-6">
-          <div className="space-y-2">
-            <label className="block text-gray-700 font-semibold">Agregar nuevo(s) archivo(s)</label>
+        <form
+          onSubmit={handleUpload}
+          className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-lg z-50"
+        >
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <select
+              value={semana}
+              onChange={(e) => setSemana(Number(e.target.value))}
+              className="border px-3 py-2 rounded w-full md:w-auto"
+            >
+              {[...Array(12)].map((_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  Semana {i + 1}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              className="border px-3 py-2 rounded w-full md:w-auto"
+            >
+              {categorias.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+
             <input
               type="file"
               multiple
               onChange={handleFileChange}
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full md:w-auto"
             />
-          </div>
 
-          {files.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-gray-700 font-medium mt-4">Archivos a subir:</h3>
-              <ul className="space-y-1">
-                {files.map((file, index) => (
-                  <li key={index} className="p-2 bg-gray-100 rounded flex justify-between items-center">
-                    {file.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex space-x-4">
             <button
               type="submit"
-              className="w-full py-2 bg-green-500 hover:bg-green-600 text-white rounded transition"
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
             >
               Subir archivos
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="w-full py-2 bg-gray-400 hover:bg-gray-500 text-white rounded transition"
-            >
-              Cancelar
             </button>
           </div>
         </form>
 
-        <div className="pt-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Archivos subidos</h2>
-          {uploadedFiles.length === 0 ? (
-            <p className="text-gray-500">No hay archivos en este portafolio.</p>
-          ) : (
-            <table className="w-full table-auto border-collapse">
-              <thead>
-                <tr className="bg-gray-200 text-gray-700 text-left">
-                  <th className="px-4 py-2">Nombre</th>
-                  <th className="px-4 py-2">Tipo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {uploadedFiles.map((file, index) => (
-                  <tr key={index} className="bg-blue-50 border-b">
-                    <td className="px-4 py-2">{file.nombre || "Archivo"}</td>
-                    <td className="px-4 py-2">{file.tipo || "?"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div className="mt-8 space-y-6">
+          {[...Array(12)].map((_, semanaIndex) => {
+            const semanaActual = semanaIndex + 1;
+            const archivosSemana = uploadedFiles.filter((f) => f.semana === semanaActual);
+
+            return (
+              <div key={semanaActual} className="bg-white rounded shadow p-4">
+                <h2 className="text-lg font-semibold text-blue-700 mb-2">
+                  Semana {semanaActual}
+                </h2>
+
+                {categorias.map((cat) => {
+                  const archivosCat = archivosSemana.filter((f) => f.categoria === cat);
+
+                  return (
+                    <div key={cat} className="mb-4">
+                      <h3 className="text-sm font-bold text-gray-600">{cat}</h3>
+                      {archivosCat.length > 0 ? (
+                        <ul className="list-disc list-inside text-sm text-gray-800 ml-4">
+                          {archivosCat.map((file, i) => (
+                            <li key={i} className="flex justify-between items-center">
+                              <a
+                                href={file.url || file.enlace || "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                {file.nombreOriginal || file.originalName || file.filename || "Archivo"}
+                              </a>
+                              {(rol === "ADMINISTRADOR" || file.usuario === correo) && (
+                                <button
+                                  onClick={() => handleDelete(file._id)}
+                                  className="ml-4 text-red-500 hover:text-red-700 text-xs"
+                                >
+                                  🗑 Eliminar
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-500 ml-4">No hay archivos en esta categoría.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

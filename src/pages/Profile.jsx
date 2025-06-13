@@ -1,37 +1,33 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+
+const apiUrl = import.meta.env.VITE_API_URL;
 
 function Profile() {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
-  const rol = localStorage.getItem("rol");
-  const correo = localStorage.getItem("correo");
   const token = localStorage.getItem("token");
+  const userId = localStorage.getItem("userId");
+  const rol = localStorage.getItem("rol");
 
   const [form, setForm] = useState({
     nombre: "",
     apellido: "",
-    imagen: null,
     password: "",
     newPassword: "",
     confirmNewPassword: "",
   });
 
-  const [previewImage, setPreviewImage] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [loading, setLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
-    fetch(`https://bkportafolio.fly.dev/api/auth/profile`, {
+    fetch(`${apiUrl}/auth/profile`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(`Error ${res.status}: ${err}`);
-        }
-        return await res.json();
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
       })
       .then((data) => {
         setForm((prev) => ({
@@ -39,28 +35,16 @@ function Profile() {
           nombre: data.user.nombre || "",
           apellido: data.user.apellido || "",
         }));
-        if (data.imagen) setPreviewImage(data.imagen);
-        console.log(data)
       })
       .catch((err) => {
         console.error("❌ Error al obtener perfil:", err);
         setMensaje("❌ No se pudo cargar tu perfil.");
       });
-  }, [correo, token]);
+  }, [token]);
 
   const handleChange = (e) => {
-    const { name, value, files } = e.target;
-    if (name === "imagen") {
-      const file = files[0];
-      setForm({ ...form, imagen: file });
-      if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => setPreviewImage(reader.result);
-        reader.readAsDataURL(file);
-      }
-    } else {
-      setForm({ ...form, [name]: value });
-    }
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
   };
 
   const handleSubmit = async (e) => {
@@ -70,23 +54,26 @@ function Profile() {
       return;
     }
 
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("nombre", form.nombre);
-    formData.append("apellido", form.apellido);
-    if (form.imagen) formData.append("archivo", form.imagen);
+    if (!userId) {
+      setMensaje("❌ Usuario no identificado.");
+      return;
+    }
 
+    setLoading(true);
     try {
-      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${correo}`, {
+      const res = await fetch(`${apiUrl}/user/${userId}`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          nombre: form.nombre,
+          apellido: form.apellido,
+        }),
       });
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(err);
-      }
+      if (!res.ok) throw new Error(await res.text());
 
       setMensaje("✅ Cambios guardados correctamente.");
     } catch (err) {
@@ -109,8 +96,13 @@ function Profile() {
       return;
     }
 
+    if (!userId) {
+      setMensaje("❌ Usuario no identificado.");
+      return;
+    }
+
     try {
-      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${correo}/password`, {
+      const res = await fetch(`${apiUrl}/user/${userId}/password`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -122,10 +114,7 @@ function Profile() {
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(err);
-      }
+      if (!res.ok) throw new Error(await res.text());
 
       setMensaje("✅ Contraseña actualizada.");
       setShowPasswordModal(false);
@@ -136,13 +125,8 @@ function Profile() {
     }
   };
 
-  const handleImageButtonClick = () => {
-    fileInputRef.current.click();
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center px-4 relative">
-      {/* Botón fijo Panel Admin */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
         {rol === "ADMINISTRADOR" && (
           <button
@@ -164,35 +148,6 @@ function Profile() {
         <h2 className="text-3xl font-bold text-center text-blue-700">Editar Perfil</h2>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="flex flex-col items-center space-y-3">
-            {previewImage ? (
-              <img
-                src={previewImage}
-                alt="Imagen de perfil"
-                className="w-24 h-24 rounded-full object-cover border-2 border-orange-400"
-              />
-            ) : (
-              <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
-                Sin imagen
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleImageButtonClick}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-lg shadow transition"
-            >
-              ✏️ Cambiar imagen
-            </button>
-            <input
-              type="file"
-              name="imagen"
-              accept="image/*"
-              onChange={handleChange}
-              ref={fileInputRef}
-              className="hidden"
-            />
-          </div>
-
           <div>
             <label className="block text-gray-700 mb-1">Nombres</label>
             <input

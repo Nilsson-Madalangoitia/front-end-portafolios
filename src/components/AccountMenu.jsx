@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-function AccountMenu({ onManage, onLogout }) {
+function AccountMenu({ onManage }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef();
   const navigate = useNavigate();
@@ -19,6 +19,22 @@ function AccountMenu({ onManage, onLogout }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleLogout = () => {
+    localStorage.clear();
+    setOpen(false);
+    navigate("/login");
+  };
+
+  // Gestionar cuenta: usa onManage si viene, si no navega a /profile
+  const handleManageAccount = () => {
+    if (onManage) {
+      onManage();
+    } else {
+      navigate("/profile");
+    }
+    setOpen(false);
+  };
+
   return (
     <div className="relative" ref={menuRef}>
       <button
@@ -34,28 +50,13 @@ function AccountMenu({ onManage, onLogout }) {
       {open && (
         <div className="absolute right-0 mt-2 w-56 bg-white border rounded-xl shadow-lg overflow-hidden z-50">
           <button
-            onClick={() => {
-              onManage();
-              setOpen(false);
-            }}
+            onClick={handleManageAccount}
             className="w-full text-left px-4 py-3 text-blue-600 hover:bg-blue-50 font-semibold"
           >
             Gestionar cuenta
           </button>
           <button
-            onClick={() => {
-              navigate("/my-portfolios");
-              setOpen(false);
-            }}
-            className="w-full text-left px-4 py-3 text-blue-600 hover:bg-blue-50 font-semibold"
-          >
-            Mis portafolios
-          </button>
-          <button
-            onClick={() => {
-              onLogout();
-              setOpen(false);
-            }}
+            onClick={handleLogout}
             className="w-full text-left px-4 py-3 text-gray-500 hover:bg-gray-100 font-semibold"
           >
             Cerrar sesión

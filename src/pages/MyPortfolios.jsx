@@ -1,293 +1,322 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ConfirmModal from "../components/ConfirmModal";
+import AccountMenu from "../components/AccountMenu";
+
+const apiUrl = import.meta.env.VITE_API_URL;
 
 function MyPortfolios() {
   const navigate = useNavigate();
   const rol = localStorage.getItem("rol");
   const token = localStorage.getItem("token");
+  const userId = localStorage.getItem("userId");
 
+  // Estados para crear y filtrar portafolios
   const [portfolios, setPortfolios] = useState([]);
-  const [newPortfolio, setNewPortfolio] = useState({ nombre: "", periodo: "2025-I" });
+  const [newPortfolioName, setNewPortfolioName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newYear, setNewYear] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [editingData, setEditingData] = useState({ nombre: "", periodo: "2025-I" });
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [portfolioToDelete, setPortfolioToDelete] = useState(null);
+  const [editingName, setEditingName] = useState("");
+  const [editingDescription, setEditingDescription] = useState("");
+  const [editingYear, setEditingYear] = useState("");
+  const [filterYear, setFilterYear] = useState("");
+  const [filterName, setFilterName] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
 
+  // Obtiene y filtra portafolios según el usuario (Admin ve todos, docente ve solo los suyos)
   const fetchPortfolios = async () => {
     try {
-      const res = await fetch("https://bkportafolio.fly.dev/api/portafolio", {
-        
+      const res = await fetch(`${apiUrl}/portafolio`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Error ${res.status}: ${err}`);
-      }
-
+      if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setPortfolios(data.data);
+
+      // Filtrar solo los portafolios con estado 'activo' o sin estado (compatibilidad hacia atrás)
+      const filtered = data.data
+        .filter(p => !("estado" in p) || p.estado === "activo")
+        .filter((p) =>
+          rol === "ADMINISTRADOR"
+            ? true
+            : (
+                (typeof p.creadoPor === "string" && p.creadoPor === userId) ||
+                (typeof p.creadoPor === "object" && p.creadoPor?.id === userId) ||
+                (p.usuario && p.usuario._id === userId)
+              )
+        );
+
+      setPortfolios(filtered);
     } catch (err) {
       console.error("❌ Error al obtener portafolios:", err);
     }
   };
 
   useEffect(() => {
+    if (!token) {
+      navigate("/login");
+    }
     fetchPortfolios();
+    // eslint-disable-next-line
   }, []);
 
-  const handleCreate = async () => {
-    if (!newPortfolio.nombre.trim()) {
-      alert("⚠️ El nombre del portafolio es obligatorio.");
+  // Crear portafolio nuevo
+  const handleAddPortfolio = async () => {
+    if (!newPortfolioName.trim() || !newDescription.trim() || !newYear.trim()) {
+      alert("⚠️ Por favor ingresa nombre, descripción y año para el portafolio.");
       return;
     }
 
     try {
-      const res = await fetch("https://bkportafolio.fly.dev/api/portafolio", {
+      const res = await fetch(`${apiUrl}/portafolio`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          descripcion: newPortfolio.nombre,
-          anio: newPortfolio.periodo,
-          nombre: newPortfolio.nombre,
-          
+          nombre: newPortfolioName,
+          descripcion: newDescription,
+          anio: newYear,
+          creadoPor: userId,
         }),
       });
 
-      const data = await res.json();
+      if (!res.ok) throw new Error(await res.text());
 
-      if (res.ok) {
-        setNewPortfolio({ nombre: "", periodo: "2025-I" });
-        fetchPortfolios();
-      } else {
-        alert(data.message || "❌ Error al crear portafolio.");
-      }
-    } catch (error) {
-      console.error("❌ Error al crear portafolio:", error);
+      await fetchPortfolios();
+      setNewPortfolioName("");
+      setNewDescription("");
+      setNewYear("");
+    } catch (err) {
+      console.error("❌ Error al crear portafolio:", err);
+      alert("Error al crear portafolio: Verifica los campos. Todos son requeridos.");
     }
   };
 
-  const handleEditClick = (portfolio) => {
-    setEditingId(portfolio.id);
-    setEditingData({  nombre: portfolio.descripcion, periodo: portfolio.anio });
-  };
-
-  const handleSaveEdit = async (id) => {
-    if (!editingData.nombre.trim()) {
-      alert("⚠️ El nombre del portafolio no puede estar vacío.");
-      return;
-    }
-
+  // Editar portafolio completo (nombre, descripción y año)
+  const handleEditPortfolio = async (id) => {
     try {
-      const res = await fetch(`https://bkportafolio.fly.dev/api/portafolio/${id}`, {
+      const res = await fetch(`${apiUrl}/portafolio/${id}`, {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          descripcion: editingData.nombre,
-          nombre: editingData.nombre,
-          anio: editingData.periodo,
+          nombre: editingName,
+          descripcion: editingDescription,
+          anio: editingYear,
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Error ${res.status}: ${err}`);
-      }
+      if (!res.ok) throw new Error(await res.text());
 
-      fetchPortfolios();
+      await fetchPortfolios();
       setEditingId(null);
-    } catch (error) {
-      console.error("❌ Error al editar portafolio:", error);
+    } catch (err) {
+      console.error("❌ Error al editar portafolio:", err);
     }
   };
 
-  const handleDelete = async () => {
+  // Eliminar portafolio (soft delete)
+  const handleDeletePortfolio = async () => {
+    console.log("Ejecutando handleDeletePortfolio con deleteId:", deleteId);
     try {
-      console.log(portfolioToDelete) 
-      const res = await fetch(
-        `https://bkportafolio.fly.dev/api/portafolio/${portfolioToDelete}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const res = await fetch(`${apiUrl}/portafolio/${deleteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+     console.log("Ejecutando handleDeletePortfolio con deleteId:", deleteId);
+      if (!res.ok) throw new Error(await res.text());
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Error ${res.status}: ${err}`);
-      }
-
-      fetchPortfolios();
-      setShowDeleteModal(false);
-    } catch (error) {
-      console.error("❌ Error al eliminar portafolio:", error);
+      await fetchPortfolios();
+      setDeleteId(null);
+      setShowConfirm(false);
+    } catch (err) {
+      console.error("❌ Error al eliminar portafolio:", err);
     }
   };
 
-  const handleGoToPortfolio = (id) => {
-    navigate(`/portfolio/${id}`);
-  };
+  // Filtro por nombre y año
+  const filteredPortfolios = portfolios.filter(
+    (p) =>
+      (!filterYear || p.anio === filterYear) &&
+      (!filterName || p.nombre.toLowerCase().includes(filterName.toLowerCase()))
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 p-8">
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
-        {rol === "ADMINISTRADOR" && (
-          <button
-            onClick={() => navigate("/admin")}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
-          >
-            ⬅ Panel Admin
-          </button>
-        )}
+    <div className="min-h-screen bg-gray-50 p-6 relative">
+      {/* ESQUINA SUPERIOR DERECHA: Inicio + AccountMenu */}
+      <div className="absolute top-4 right-4 z-50 flex gap-2">
+        <button
+          onClick={() => navigate("/docente/dashboard")}
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
+        >
+          ⬅ Inicio
+        </button>
+        <AccountMenu />
       </div>
 
-      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8 space-y-8 border border-gray-200">
-        {rol === "ADMINISTRADOR" && (
-          <div className="max-w-xl mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-4">
-            Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
-          </div>
-        )}
+      <div className="max-w-5xl mx-auto bg-white shadow-lg rounded-xl p-6 space-y-8">
+        <h1 className="text-3xl font-bold text-gray-800 text-center">Mis Portafolios</h1>
 
-        <h1 className="text-3xl font-bold text-center text-gray-800">Mis Portafolios</h1>
+        {/* Filtros */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input
+            type="text"
+            placeholder="Filtrar por nombre"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
+          />
+          <input
+            type="text"
+            placeholder="Filtrar por año"
+            value={filterYear}
+            onChange={(e) => setFilterYear(e.target.value)}
+            className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-400"
+          />
+        </div>
 
-        <div className="border-b pb-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">Agregar nuevo portafolio</h2>
-          <div className="flex flex-col md:flex-row md:space-x-4 space-y-4 md:space-y-0">
+        {/* Formulario de nuevo portafolio */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-gray-700">Agregar nuevo portafolio</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
             <input
               type="text"
               placeholder="Nombre del portafolio"
-              value={newPortfolio.nombre}
-              onChange={(e) =>
-                setNewPortfolio({ ...newPortfolio, nombre: e.target.value })
-              }
-              className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
+              value={newPortfolioName}
+              onChange={(e) => setNewPortfolioName(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
             />
             <input
               type="text"
-              value={newPortfolio.periodo}
-              onChange={(e) =>
-                setNewPortfolio({ ...newPortfolio, periodo: e.target.value })
-              }
-              className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-400"
+              placeholder="Descripción"
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-violet-400"
+            />
+            <input
+              type="text"
+              placeholder="Año (Ej: 2025-I)"
+              value={newYear}
+              onChange={(e) => setNewYear(e.target.value)}
+              className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-400"
             />
             <button
-              onClick={handleCreate}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              onClick={handleAddPortfolio}
+              className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
               Crear
             </button>
           </div>
         </div>
 
-        <div className="space-y-6">
-          {portfolios.length === 0 ? (
-            <p className="text-gray-500 text-center">Aún no tienes portafolios creados.</p>
-          ) : (
-            portfolios.map((p) => (
+        {/* Lista de portafolios */}
+        {filteredPortfolios.length === 0 ? (
+          <p className="text-center text-gray-500 mt-6">Aún no tienes portafolios creados.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            {filteredPortfolios.map((portfolio) => (
               <div
-                key={p.id}
-                className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg bg-blue-50 hover:shadow-md transition"
+                key={portfolio.id}
+                className="flex flex-col justify-between border p-4 rounded-xl bg-gray-100 hover:bg-gray-200 transition cursor-pointer"
               >
-                {editingId === p.id ? (
-                  <div className="flex-1 flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                {/* Si se está editando este portafolio, muestra el formulario */}
+                {editingId === portfolio.id ? (
+                  <>
                     <input
                       type="text"
-                      value={editingData.nombre}
-                      onChange={(e) =>
-                        setEditingData({ ...editingData, nombre: e.target.value })
-                      }
-                      className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 flex-1"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      className="px-3 py-2 border rounded-lg mb-2"
+                      placeholder="Nombre"
                     />
                     <input
                       type="text"
-                      value={editingData.periodo}
-                      onChange={(e) =>
-                        setEditingData({ ...editingData, periodo: e.target.value })
-                      }
-                      className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-400"
+                      value={editingDescription}
+                      onChange={(e) => setEditingDescription(e.target.value)}
+                      className="px-3 py-2 border rounded-lg mb-2"
+                      placeholder="Descripción"
                     />
-                  </div>
-                ) : (
-                  <div
-                    className="flex-1 cursor-pointer"
-                    onClick={() => handleGoToPortfolio(p.id)}
-                  >
-                    <p className="font-semibold text-blue-800">{p.descripcion}</p>
-                    <p className="text-sm text-gray-500">{p.anio}</p>
-                  </div>
-                )}
-
-                <div className="flex space-x-2 mt-4 md:mt-0">
-                  {editingId === p.id ? (
-                    <>
+                    <input
+                      type="text"
+                      value={editingYear}
+                      onChange={(e) => setEditingYear(e.target.value)}
+                      className="px-3 py-2 border rounded-lg mb-2"
+                      placeholder="Año"
+                    />
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => handleSaveEdit(p.id)}
-                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                        onClick={() => handleEditPortfolio(portfolio.id)}
+                        className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                       >
                         Guardar
                       </button>
                       <button
                         onClick={() => setEditingId(null)}
-                        className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
+                        className="flex-1 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
                       >
                         Cancelar
                       </button>
-                    </>
-                  ) : (
-                    <>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Portafolio visualización */}
+                    <div
+                      onClick={() => navigate(`/portfolio/${portfolio.id}`)}
+                      className="text-lg font-semibold text-gray-700 mb-1 truncate"
+                    >
+                      {portfolio.nombre}
+                    </div>
+                    <div className="text-sm text-gray-500 mb-1">{portfolio.anio}</div>
+                    <div className="text-xs text-gray-600 mb-2 truncate">{portfolio.descripcion}</div>
+                    <div className="flex gap-3">
                       <button
-                        onClick={() => handleEditClick(p)}
-                        className="px-4 py-2 bg-orange-400 text-white rounded-lg hover:bg-orange-500 transition"
+                        onClick={() => {
+                          setEditingId(portfolio.id);
+                          setEditingName(portfolio.nombre);
+                          setEditingDescription(portfolio.descripcion || "");
+                          setEditingYear(portfolio.anio || "");
+                        }}
+                        className="text-orange-600 hover:underline text-sm"
                       >
                         Editar
                       </button>
-                      <button
+                     <button
                         onClick={() => {
-                          setPortfolioToDelete(p.id);
-                          setShowDeleteModal(true);
+                          console.log("Quiero eliminar", portfolio.id);
+                          setDeleteId(portfolio.id);
+                          setShowConfirm(true);
                         }}
-                        className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                        className="text-red-600 hover:underline text-sm"
                       >
                         Eliminar
                       </button>
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {showDeleteModal && (
-        <div className="fixed inset-0 flex justify-center items-center bg-gray-800 bg-opacity-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold text-center text-gray-800">
-              ¿Seguro que deseas eliminar este portafolio?
-            </h3>
-            <div className="flex justify-center space-x-4 mt-4">
-              <button
-                onClick={handleDelete}
-                className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-              >
-                Eliminar
-              </button>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="px-6 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de confirmación para eliminar */}
+      {showConfirm && (
+     <ConfirmModal
+      isOpen={showConfirm} // ¡Prop correcto!
+      title="Eliminar portafolio"
+      message="¿Estás seguro de eliminar este portafolio?"
+     onConfirm={handleDeletePortfolio}
+     onCancel={() => setShowConfirm(false)}
+     dangerLabel="Eliminar"
+  />
+)}
+
     </div>
   );
 }

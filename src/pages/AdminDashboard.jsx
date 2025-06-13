@@ -1,35 +1,42 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import AccountMenu from "../components/AccountMenu";
+import * as bcrypt from "bcryptjs";
+
+const apiUrl = import.meta.env.VITE_API_URL;
 
 function AdminDashboard() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const rol = localStorage.getItem("rol");
 
+  // Redirigir si no hay token
+  useEffect(() => {
+    if (!token) {
+      navigate("/login");
+    } else {
+      fetchUsuarios();
+    }
+  }, []);
+
+  // Estados principales
   const [usuarios, setUsuarios] = useState([]);
   const [nuevoUsuario, setNuevoUsuario] = useState({
     nombre: "",
     apellido: "",
     email: "",
     password: "",
-    rol: "680ec523f6bc85c713d73d5c",
+    rol: "680ec523f6bc85c713d73d5c", // ID del rol docente
   });
   const [editandoId, setEditandoId] = useState(null);
 
+  // Obtener usuarios desde el backend
   const fetchUsuarios = async () => {
     try {
-      const res = await fetch("https://bkportafolio.fly.dev/api/user", {
-      
-        method: "GET",
+      const res = await fetch(`${apiUrl}/user`, {
         headers: { Authorization: `Bearer ${token}` },
-
       });
-    
-       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText}`);
-      }
+      if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setUsuarios(data.data);
     } catch (err) {
@@ -37,19 +44,17 @@ function AdminDashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchUsuarios();
-  }, []);
-
+  // Actualizar campos de formulario
   const handleChange = (e) => {
     const { name, value } = e.target;
     setNuevoUsuario((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Registrar nuevo usuario
   const handleRegistrar = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch("https://bkportafolio.fly.dev/api/auth/signup", {
+      const res = await fetch(`${apiUrl}/auth/signup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -57,12 +62,7 @@ function AdminDashboard() {
         },
         body: JSON.stringify(nuevoUsuario),
       });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText}`);
-      }
-
+      if (!res.ok) throw new Error(await res.text());
       setNuevoUsuario({
         nombre: "",
         apellido: "",
@@ -76,37 +76,45 @@ function AdminDashboard() {
     }
   };
 
+  // Preparar edición de usuario
   const handleEditar = (usuario) => {
-    console.log(usuario)
     setEditandoId(usuario.id);
     setNuevoUsuario({
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       email: usuario.email,
-      password: "sistemas",
+      password: "",
       rol: usuario.rol.id,
     });
   };
 
+  // Actualizar usuario
   const handleActualizar = async (e) => {
     e.preventDefault();
     try {
-      console.log(editandoId)
-      console.log(nuevoUsuario)
-      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${editandoId}`, {
+      const data = {
+        nombre: nuevoUsuario.nombre,
+        apellido: nuevoUsuario.apellido,
+        email: nuevoUsuario.email,
+        rol: nuevoUsuario.rol,
+      };
+
+      if (nuevoUsuario.password.trim() !== "") {
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(nuevoUsuario.password, salt);
+        data.password = hash;
+      }
+
+      const res = await fetch(`${apiUrl}/user/${editandoId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(nuevoUsuario),
-        
+        body: JSON.stringify(data),
       });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText}`);
-      }
+      if (!res.ok) throw new Error(await res.text());
 
       setEditandoId(null);
       setNuevoUsuario({
@@ -122,19 +130,16 @@ function AdminDashboard() {
     }
   };
 
+  // Eliminar usuario
   const handleEliminar = async (id) => {
     if (!confirm("¿Seguro que deseas eliminar este usuario?")) return;
     try {
-      const res = await fetch(`https://bkportafolio.fly.dev/api/user/${id}`, {
+      const res = await fetch(`${apiUrl}/user/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText}`);
-      }
-
+      if (!res.ok) throw new Error(await res.text());
       fetchUsuarios();
     } catch (err) {
       console.error("❌ Error al eliminar:", err);
@@ -143,30 +148,44 @@ function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-6 relative">
+      {/* 🔵 Botones superiores a la izquierda */}
+     
       <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
+        <div className="flex gap-4">
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/home")}
           className="bg-blue-600 text-white px-4 py-2 rounded-full shadow hover:bg-blue-700 transition"
-        >
-          ⬅ Volver al inicio
+           >
+          🔍 Ir a Buscador
         </button>
-        <AccountMenu
-          onManage={() => navigate("/profile")}
-          onLogout={() => {
-            localStorage.clear();
-            navigate("/login");
-          }}
-        />
+        <button
+          onClick={() => navigate("/admin/home")}
+          className="bg-orange-500 text-white px-4 py-2 rounded-full shadow hover:bg-orange-600 transition"
+            >
+          📂 Home de Admin
+        </button>
       </div>
+  
+  {/* 🔒 Botones y menú de cuenta en la esquina superior derecha */}
+  <AccountMenu
+    onManage={() => navigate("/profile")}
+    onLogout={() => {
+      localStorage.clear();
+      navigate("/login");
+    }}
+  />
+</div>
 
+
+      {/* Mensaje de rol */}
       {rol === "ADMINISTRADOR" && (
-        <div className="max-w-xl mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-6">
+        <div className="max-w-sm mx-auto bg-yellow-50 border border-yellow-300 text-yellow-800 text-sm rounded-md py-2 px-4 shadow-sm text-center mb-6">
           Estás visualizando el sistema como <span className="font-semibold">Administrador</span>.
         </div>
       )}
 
       <div className="max-w-5xl mx-auto space-y-10">
-        {/* Formulario */}
+        {/* 🟢 Formulario de registro / edición */}
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-bold text-gray-800 mb-4">
             {editandoId ? "Editar Docente" : "Registrar Docente"}
@@ -220,7 +239,7 @@ function AdminDashboard() {
           </form>
         </div>
 
-        {/* Lista */}
+        {/* 🗂 Lista de usuarios */}
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-bold text-gray-800 mb-4">Docentes Registrados</h2>
           <div className="overflow-x-auto">

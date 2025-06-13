@@ -1,32 +1,107 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+
+// 🧩 Páginas del sistema
 import Home from "../pages/Home";
 import Login from "../pages/Login";
 import Profile from "../pages/Profile";
 import AdminDashboard from "../pages/AdminDashboard";
 import MyPortfolios from "../pages/MyPortfolios";
-import PortfolioDetail from "../pages/PortfolioDetail";
+import DocumentUpload from "../pages/DocumentUpload";
+import DocenteDashboard from "../pages/DocenteDashboard";
+import AdminHome from "../pages/AdminHome";
+
+// 🔐 Verifica si el token existe y no ha expirado
+const isTokenValid = () => {
+  const token = localStorage.getItem("token");
+  const expiry = localStorage.getItem("tokenExpiry");
+  if (!token || !expiry) return false;
+  return new Date().getTime() < Number(expiry);
+};
+
+// 🔐 Ruta protegida: verifica token y rol
+const PrivateRoute = ({ element, roles }) => {
+  const tokenIsValid = isTokenValid();
+  const userRol = localStorage.getItem("rol");
+
+  if (!tokenIsValid) return <Navigate to="/login" />;
+  if (roles && !roles.includes(userRol)) return <Navigate to="/home" />;
+
+  return element;
+};
+
+// 📍 Redirección inicial desde "/"
+function RootRedirect() {
+  if (isTokenValid()) {
+    const rol = localStorage.getItem("rol");
+    if (rol === "ADMINISTRADOR") {
+      return <Navigate to="/admin/home" />;
+    } else {
+      return <Navigate to="/docente/dashboard" />;
+    }
+  } else {
+    return <Navigate to="/login" />;
+  }
+}
 
 function AppRouter() {
   return (
     <Router>
       <Routes>
-        {/* Página principal para usuarios */}
-        <Route path="/" element={<Home />} />
+        {/* 🚪 Entrada al sistema */}
+        <Route path="/" element={<RootRedirect />} />
 
-        {/* Login */}
-        <Route path="/login" element={<Login />} />
+        {/* Login → redirige si ya hay sesión activa */}
+        <Route
+          path="/login"
+          element={
+            isTokenValid() ? (
+              localStorage.getItem("rol") === "ADMINISTRADOR" ? (
+                <Navigate to="/admin/home" />
+              ) : (
+                <Navigate to="/docente/dashboard" />
+              )
+            ) : (
+              <Login />
+            )
+          }
+        />
 
-        {/* Perfil */}
-        <Route path="/profile" element={<Profile />} />
+        {/* Rutas compartidas */}
+        <Route
+          path="/home"
+          element={<PrivateRoute element={<Home />} roles={["ADMINISTRADOR", "DOCENTE"]} />}
+        />
+        <Route
+          path="/profile"
+          element={<PrivateRoute element={<Profile />} roles={["ADMINISTRADOR", "DOCENTE"]} />}
+        />
+        <Route
+          path="/my-portfolios"
+          element={<PrivateRoute element={<MyPortfolios />} roles={["ADMINISTRADOR", "DOCENTE"]} />}
+        />
+        <Route
+          path="/portfolio/:id"
+          element={<PrivateRoute element={<DocumentUpload />} roles={["ADMINISTRADOR", "DOCENTE"]} />}
+        />
 
-        {/* Dashboard de Administrador */}
-        <Route path="/admin" element={<AdminDashboard />} />
+        {/* Solo DOCENTE */}
+        <Route
+          path="/docente/dashboard"
+          element={<PrivateRoute element={<DocenteDashboard />} roles={["DOCENTE"]} />}
+        />
 
-        {/* Listado de Portafolios */}
-        <Route path="/my-portfolios" element={<MyPortfolios />} />
+        {/* Solo ADMIN */}
+        <Route
+          path="/admin"
+          element={<PrivateRoute element={<AdminDashboard />} roles={["ADMINISTRADOR"]} />}
+        />
+        <Route
+          path="/admin/home"
+          element={<PrivateRoute element={<AdminHome />} roles={["ADMINISTRADOR"]} />}
+        />
 
-        {/* Detalle de Portafolio específico */}
-        <Route path="/portfolio/:id" element={<PortfolioDetail />} />
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
   );
